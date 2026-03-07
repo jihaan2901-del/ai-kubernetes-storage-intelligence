@@ -1,71 +1,77 @@
-from kubernetes import client, config
+import subprocess
 import pandas as pd
 import time
 import os
-import random
 
 FILE_PATH = "data/storage.csv"
-TOTAL_STORAGE = 10
-
-config.load_kube_config(config_file="/etc/rancher/k3s/k3s.yaml")
-v1 = client.CoreV1Api()
 
 
-def get_last_storage(pod):
+def run_cmd(cmd):
+    """Run shell command and return output"""
+    try:
+        out = subprocess.check_output(cmd, shell=True).decode().strip()
+        return out
+    except subprocess.CalledProcessError as e:
+        print("Command failed:", cmd)
+        print(e)
+        return None
 
-    if not os.path.exists(FILE_PATH):
-        return 0.1
 
-    df = pd.read_csv(FILE_PATH)
+def get_pod(label):
+    """Get pod name by label"""
+    cmd = f"kubectl get pods -l app={label} -o jsonpath='{{.items[0].metadata.name}}'"
+    pod = run_cmd(cmd)
 
-    pod_rows = df[df["pod"] == pod]
+    if not pod:
+        print(f"No pod found for {label}")
+        return None
 
-    if len(pod_rows) == 0:
-        return 0.1
+    return pod
 
-    return pod_rows.iloc[-1]["storage_used"]
+
+def get_storage(pod, path):
+    """Get folder size inside container"""
+    cmd = f"kubectl exec {pod} -- sh -c 'du -s {path} 2>/dev/null'"
+    out = run_cmd(cmd)
+
+    if not out:
+        return 0
+
+    size_kb = int(out.split()[0])
+    size_gb = size_kb / (1024 * 1024)
+
+    return size_gb
 
 
 def collect_data():
 
-    pods = v1.list_pod_for_all_namespaces(watch=False)
+    redis_pod = get_pod("redis")
+    mongo_pod = get_pod("mongodb")
 
     records = []
 
-    for pod in pods.items:
+    if redis_pod:
+        redis_storage = get_storage(redis_pod, "/data")
 
-        namespace = pod.metadata.namespace
-
-        if namespace != "default":
-            continue
-
-        pod_name = pod.metadata.name
-
-        last_storage = get_last_storage(pod_name)
-
-        growth = 0
-
-        if "redis" in pod_name:
-            growth = random.uniform(0.3, 0.8)
-
-        elif "mongodb" in pod_name:
-            growth = random.uniform(0.02, 0.05)
-
-        new_storage = min(last_storage + growth, TOTAL_STORAGE)
-
-        record = {
+        records.append({
             "timestamp": time.time(),
-            "pod": pod_name,
-            "namespace": namespace,
-            "status": pod.status.phase,
-            "node": pod.spec.node_name,
-            "storage_used": new_storage,
-            "total_storage": TOTAL_STORAGE
-        }
+            "pod": "redis",
+            "storage_used": redis_storage,
+            "total_storage": 10
+        })
 
-        records.append(record)
+    if mongo_pod:
+        mongo_storage = get_storage(mongo_pod, "/data/db")
+
+        records.append({
+            "timestamp": time.time(),
+            "pod": "mongodb",
+            "storage_used": mongo_storage,
+            "total_storage": 10
+        })
 
     if not records:
+        print("No storage data collected")
         return
 
     os.makedirs("data", exist_ok=True)
@@ -77,4 +83,4 @@ def collect_data():
     else:
         df.to_csv(FILE_PATH, mode="a", header=False, index=False)
 
-    print("Collected:", records)
+    print("Collected storage:", records)

@@ -26,10 +26,9 @@ def predict_full_time(pod):
     model.fit(X, y)
 
     total = latest["total_storage"]
-
     last_time = latest["timestamp"]
 
-    future_times = np.linspace(last_time, last_time + 3600, 200)
+    future_times = np.linspace(last_time, last_time + 3600 * 24, 200)
 
     predictions = model.predict(future_times.reshape(-1, 1))
 

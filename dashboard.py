@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import subprocess
 from streamlit_autorefresh import st_autorefresh
 from backend.predictor import predict_full_time
 
@@ -23,27 +22,26 @@ df["time"] = pd.to_datetime(df["timestamp"], unit="s")
 
 pods = df["pod"].unique()
 
-st.subheader("Running Application Pods")
-
-st.metric("Pods Running", len(pods))
+st.metric("Containers Monitored", len(pods))
 
 for pod in pods:
 
     latest = df[df["pod"] == pod].iloc[-1]
 
-    with st.expander(f"{pod} | Status: {latest['status']}"):
+    with st.expander(pod):
 
         used = latest["storage_used"]
         total = latest["total_storage"]
+
         remaining = total - used
 
         col1, col2, col3 = st.columns(3)
 
-        col1.metric("Storage Used (GB)", round(used, 2))
+        col1.metric("Storage Used (GB)", round(used,2))
         col2.metric("Total Storage (GB)", total)
-        col3.metric("Remaining Storage (GB)", round(remaining, 2))
+        col3.metric("Remaining Storage (GB)", round(remaining,2))
 
-        st.progress(min(used / total, 1.0))
+        st.progress(min(used / total,1.0))
 
         prediction = predict_full_time(pod)
 
@@ -51,14 +49,4 @@ for pod in pods:
 
         pod_df = df[df["pod"] == pod]
 
-        st.subheader("Storage Growth")
-
         st.line_chart(pod_df.set_index("time")["storage_used"])
-
-        if "redis" in pod:
-
-            if st.button(f"Clear Redis Storage ({pod})"):
-
-                subprocess.run(["python", "clear_redis.py"])
-
-                st.success("Redis storage cleared")
