@@ -11,7 +11,7 @@ def predict_full_time(pod):
 
     pod_df = df[df["pod"] == pod]
 
-    if len(pod_df) < 5:
+    if len(pod_df) < 10:
         return "Collecting data..."
 
     latest = pod_df.iloc[-1]
@@ -28,7 +28,8 @@ def predict_full_time(pod):
     total = latest["total_storage"]
     last_time = latest["timestamp"]
 
-    future_times = np.linspace(last_time, last_time + 3600 * 24, 200)
+    # predict for next 7 days
+    future_times = np.linspace(last_time, last_time + 3600 * 24 * 7, 500)
 
     predictions = model.predict(future_times.reshape(-1, 1))
 
@@ -39,6 +40,10 @@ def predict_full_time(pod):
             seconds = t - last_time
             minutes = seconds / 60
             hours = minutes / 60
+
+            if hours > 24:
+                days = hours / 24
+                return f"{round(days,2)} days"
 
             return f"{round(minutes,2)} minutes (~{round(hours,2)} hours)"
 

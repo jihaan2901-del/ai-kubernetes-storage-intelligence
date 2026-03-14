@@ -2,8 +2,9 @@ import subprocess
 import pandas as pd
 import time
 import os
+from datetime import datetime
 
-FILE_PATH = "data/storage.csv"
+FILE_PATH = os.path.join(os.getcwd(), "data", "storage.csv")
 
 
 def run_cmd(cmd):
@@ -44,17 +45,24 @@ def get_storage(pod, path):
 
 
 def collect_data():
+    print("Collector running:", datetime.now())
+
+    print("Collecting data...")
 
     redis_pod = get_pod("redis")
     mongo_pod = get_pod("mongodb")
 
     records = []
 
+    now = time.time()
+    now_iso = datetime.now().isoformat()
+
     if redis_pod:
         redis_storage = get_storage(redis_pod, "/data")
 
         records.append({
-            "timestamp": time.time(),
+            "timestamp": now,
+            "datetime": now_iso,
             "pod": "redis",
             "storage_used": redis_storage,
             "total_storage": 10
@@ -64,7 +72,8 @@ def collect_data():
         mongo_storage = get_storage(mongo_pod, "/data/db")
 
         records.append({
-            "timestamp": time.time(),
+            "timestamp": now,
+            "datetime": now_iso,
             "pod": "mongodb",
             "storage_used": mongo_storage,
             "total_storage": 10

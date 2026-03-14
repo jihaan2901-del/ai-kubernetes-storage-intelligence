@@ -8,3 +8,5 @@ kubernetes
 streamlit-autorefresh
 pymongo
 redis
+uvicorn
+fastapi

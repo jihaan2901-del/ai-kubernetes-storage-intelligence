@@ -1,6 +1,6 @@
 import schedule
 import time
-from backend.collector import collect_data
+from collector import collect_data
 
 
 def start_collector():

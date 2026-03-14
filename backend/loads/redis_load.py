@@ -12,7 +12,7 @@ r = redis.Redis(
 while True:
 
     key = ''.join(random.choices(string.ascii_letters, k=10))
-    value = ''.join(random.choices(string.ascii_letters, k=20000))
+    value = ''.join(random.choices(string.ascii_letters, k=200000))
 
     r.set(key, value)
 
