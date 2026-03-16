@@ -1,50 +1,51 @@
+import sqlite3
 import pandas as pd
-import numpy as np
-from sklearn.linear_model import LinearRegression
 
-FILE_PATH = "data/storage.csv"
+DB_FILE = "storage.db"
+LIMIT = 10  # GB
 
 
 def predict_full_time(pod):
 
-    df = pd.read_csv(FILE_PATH)
+    conn = sqlite3.connect(DB_FILE)
 
-    pod_df = df[df["pod"] == pod]
+    df = pd.read_sql_query(
+        "SELECT * FROM storage_metrics WHERE pod=? ORDER BY timestamp",
+        conn,
+        params=(pod,)
+    )
 
-    if len(pod_df) < 10:
+    conn.close()
+
+    if len(df) < 6:
         return "Collecting data..."
 
-    latest = pod_df.iloc[-1]
+    # use last 6 records only
+    df = df.tail(6)
 
-    if latest["storage_used"] >= latest["total_storage"]:
-        return "Disk already full"
+    first = df.iloc[0]
+    last = df.iloc[-1]
 
-    X = pod_df["timestamp"].values.reshape(-1, 1)
-    y = pod_df["storage_used"].values
+    time_diff = last["timestamp"] - first["timestamp"]
+    storage_diff = last["storage_used"] - first["storage_used"]
 
-    model = LinearRegression()
-    model.fit(X, y)
+    if time_diff <= 0 or storage_diff <= 0:
+        return "No growth"
 
-    total = latest["total_storage"]
-    last_time = latest["timestamp"]
+    growth_rate = storage_diff / time_diff  # GB per second
 
-    # predict for next 7 days
-    future_times = np.linspace(last_time, last_time + 3600 * 24 * 7, 500)
+    remaining = LIMIT - last["storage_used"]
 
-    predictions = model.predict(future_times.reshape(-1, 1))
+    if remaining <= 0:
+        return "Disk Full"
 
-    for t, p in zip(future_times, predictions):
+    seconds = remaining / growth_rate
 
-        if p >= total:
+    # prevent unrealistic predictions
+    if seconds < 60:
+        return "< 1 minute"
 
-            seconds = t - last_time
-            minutes = seconds / 60
-            hours = minutes / 60
+    minutes = seconds / 60
+    hours = minutes / 60
 
-            if hours > 24:
-                days = hours / 24
-                return f"{round(days,2)} days"
-
-            return f"{round(minutes,2)} minutes (~{round(hours,2)} hours)"
-
-    return "Not predictable yet"
+    return f"{round(minutes,2)} minutes (~{round(hours,2)} hours)"

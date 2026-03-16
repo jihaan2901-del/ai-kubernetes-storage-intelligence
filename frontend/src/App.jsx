@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { fetchPods } from "./api";
 import {
   LineChart,
   Line,
@@ -10,40 +9,83 @@ import {
   CartesianGrid
 } from "recharts";
 
+const API = "http://localhost:8000";
+
 export default function App() {
 
   const [pods, setPods] = useState([]);
   const [selectedPod, setSelectedPod] = useState(null);
+  const [recommendation, setRecommendation] = useState(false);
 
-  async function load() {
+  async function fetchPods() {
+
+    const res = await fetch(`${API}/pods`);
+    const data = await res.json();
+
+    const updated = data.pods.map(p => ({
+      ...p,
+      history: [...p.history]
+    }));
+
+    setPods(updated);
+
+    setSelectedPod(prev => {
+
+      if (!prev) return updated[0] || null;
+
+      const found = updated.find(p => p.name === prev.name);
+
+      return found || updated[0] || null;
+
+    });
+
+  }
+
+  async function checkRecommendation() {
+
     try {
 
-      const data = await fetchPods();
+      const res = await fetch(`${API}/recommendation`);
+      const data = await res.json();
 
-      const updatedPods = data.pods.map(p => ({
-        ...p,
-        history: [...p.history]
-      }));
+      setRecommendation(data.scale_down_recommended);
 
-      setPods(updatedPods);
+    } catch {}
 
-      setSelectedPod(prev => {
-        if (!prev) return updatedPods[0] || null;
-        const updated = updatedPods.find(p => p.name === prev.name);
-        return updated || prev;
-      });
+  }
 
-    } catch (err) {
-      console.error(err);
-    }
+  async function proceedScaleDown() {
+
+    await fetch(`${API}/scale-down`, {
+      method: "POST"
+    });
+
+    setRecommendation(false);
+
+  }
+
+  async function stopPod(pod) {
+    await fetch(`${API}/stop/${pod}`, { method: "POST" });
+  }
+
+  async function startPod(pod) {
+    await fetch(`${API}/start/${pod}`, { method: "POST" });
+  }
+
+  async function deletePod(pod) {
+    await fetch(`${API}/delete/${pod}`, { method: "POST" });
   }
 
   useEffect(() => {
 
-    load();
+    fetchPods();
+    checkRecommendation();
 
     const interval = setInterval(() => {
-      load();
+
+      fetchPods();
+      checkRecommendation();
+
     }, 3000);
 
     return () => clearInterval(interval);
@@ -54,11 +96,38 @@ export default function App() {
 
     <div style={styles.page}>
 
-      <h1 style={styles.title}>AI Kubernetes Storage Intelligence</h1>
+      <h1 style={styles.title}>
+        AI Kubernetes Storage Intelligence
+      </h1>
+
+      {/* AI RECOMMENDATION PANEL */}
+
+      {recommendation && (
+
+        <div style={styles.recommendationBox}>
+
+          <h3>AI Recommendation</h3>
+
+          <p>
+            Storage has remained stable for 5 minutes.  
+            It is recommended to scale down the cluster.
+          </p>
+
+          <button
+            style={styles.scaleBtn}
+            onClick={proceedScaleDown}
+          >
+            Proceed Scale Down
+          </button>
+
+        </div>
+
+      )}
 
       <div style={styles.dashboard}>
 
-        {/* LEFT SIDEBAR */}
+        {/* SIDEBAR */}
+
         <div style={styles.sidebar}>
 
           <h3>Pods</h3>
@@ -67,10 +136,17 @@ export default function App() {
 
             const usage = pod.used / pod.total;
 
-            const status =
+            const health =
               usage > 0.8 ? "Critical"
               : usage > 0.5 ? "Warning"
               : "Healthy";
+
+            const stateColor =
+              pod.state === "ACTIVE"
+                ? "#22c55e"
+                : "#64748b";
+
+            const label = (pod.label || pod.name.split("-")[0]).toUpperCase();
 
             return (
 
@@ -78,25 +154,93 @@ export default function App() {
                 key={pod.name}
                 style={{
                   ...styles.podItem,
-                  background:
+                  border:
                     selectedPod?.name === pod.name
-                      ? "#334155"
-                      : "transparent"
+                      ? "2px solid #38bdf8"
+                      : "2px solid transparent"
                 }}
                 onClick={() => setSelectedPod(pod)}
               >
 
-                <span>{pod.name}</span>
+                <div style={styles.podHeader}>
 
-                <span style={{
-                  ...styles.status,
-                  background:
-                    status==="Critical" ? "#ef4444"
-                    : status==="Warning" ? "#f59e0b"
-                    : "#22c55e"
-                }}>
-                  {status}
-                </span>
+                  <div>
+
+                    <div style={styles.podLabel}>
+                      {label}
+                    </div>
+
+                    <div style={styles.podName}>
+                      {pod.name}
+                    </div>
+
+                  </div>
+
+                  <div
+                    style={{
+                      background: stateColor,
+                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      fontSize: "11px",
+                      color: "white"
+                    }}
+                  >
+                    {pod.state}
+                  </div>
+
+                </div>
+
+                <div
+                  style={{
+                    ...styles.status,
+                    background:
+                      health === "Critical" ? "#ef4444"
+                      : health === "Warning" ? "#f59e0b"
+                      : "#22c55e"
+                  }}
+                >
+                  {health}
+                </div>
+
+                <div style={styles.actions}>
+
+                  {pod.state === "ACTIVE" ? (
+
+                    <button
+                      style={styles.stopBtn}
+                      onClick={(e)=>{
+                        e.stopPropagation();
+                        stopPod(pod.name);
+                      }}
+                    >
+                      Stop
+                    </button>
+
+                  ) : (
+
+                    <button
+                      style={styles.startBtn}
+                      onClick={(e)=>{
+                        e.stopPropagation();
+                        startPod(pod.name);
+                      }}
+                    >
+                      Start
+                    </button>
+
+                  )}
+
+                  <button
+                    style={styles.deleteBtn}
+                    onClick={(e)=>{
+                      e.stopPropagation();
+                      deletePod(pod.name);
+                    }}
+                  >
+                    Delete
+                  </button>
+
+                </div>
 
               </div>
 
@@ -106,15 +250,17 @@ export default function App() {
 
         </div>
 
-
-        {/* RIGHT PANEL */}
+        {/* MAIN PANEL */}
 
         <div style={styles.main}>
 
           {selectedPod && (
 
             <>
-              <h2>{selectedPod.name}</h2>
+
+              <h2>
+                {(selectedPod.label || selectedPod.name.split("-")[0]).toUpperCase()}
+              </h2>
 
               <div style={styles.metrics}>
 
@@ -135,8 +281,6 @@ export default function App() {
 
               </div>
 
-              {/* GRAPH */}
-
               <div style={styles.chart}>
 
                 <ResponsiveContainer width="100%" height="100%">
@@ -146,16 +290,17 @@ export default function App() {
                     data={selectedPod.history}
                   >
 
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
 
                     <XAxis
                       dataKey="timestamp"
                       tickFormatter={(t)=>
                         new Date(t * 1000).toLocaleTimeString()
                       }
+                      stroke="#94a3b8"
                     />
 
-                    <YAxis />
+                    <YAxis stroke="#94a3b8" />
 
                     <Tooltip
                       labelFormatter={(t)=>
@@ -187,9 +332,10 @@ export default function App() {
       </div>
 
     </div>
-  );
-}
 
+  );
+
+}
 
 function Metric({title,value}) {
 
@@ -207,33 +353,46 @@ function Metric({title,value}) {
 
 }
 
-
 const styles = {
 
   page:{
     padding:"30px",
     background:"#0f172a",
     minHeight:"100vh",
-    width:"100vw",
-    boxSizing:"border-box",
     color:"#e2e8f0",
-    fontFamily:"Inter, sans-serif"
+    fontFamily:"Inter"
   },
 
   title:{
-    marginBottom:"25px"
+    marginBottom:"20px"
+  },
+
+  recommendationBox:{
+    background:"#1e293b",
+    padding:"20px",
+    borderRadius:"10px",
+    marginBottom:"20px",
+    border:"2px solid #38bdf8"
+  },
+
+  scaleBtn:{
+    background:"#38bdf8",
+    border:"none",
+    padding:"8px 16px",
+    borderRadius:"6px",
+    color:"white",
+    cursor:"pointer",
+    marginTop:"10px"
   },
 
   dashboard:{
     display:"flex",
-    width:"100%",
     height:"80vh",
     gap:"20px"
   },
 
   sidebar:{
-    width:"260px",
-    minWidth:"260px",
+    width:"300px",
     background:"#1e293b",
     padding:"20px",
     borderRadius:"10px",
@@ -241,25 +400,72 @@ const styles = {
   },
 
   podItem:{
-    display:"flex",
-    justifyContent:"space-between",
-    padding:"10px",
+    background:"#0f172a",
+    padding:"12px",
     marginTop:"10px",
-    borderRadius:"6px",
+    borderRadius:"8px",
     cursor:"pointer",
-    transition:"0.2s"
+    display:"flex",
+    flexDirection:"column",
+    gap:"6px"
+  },
+
+  podHeader:{
+    display:"flex",
+    justifyContent:"space-between"
+  },
+
+  podLabel:{
+    fontWeight:"bold"
+  },
+
+  podName:{
+    fontSize:"12px",
+    color:"#94a3b8"
   },
 
   status:{
     color:"white",
     padding:"3px 8px",
     borderRadius:"5px",
-    fontSize:"12px"
+    fontSize:"12px",
+    width:"fit-content"
+  },
+
+  actions:{
+    display:"flex",
+    gap:"8px"
+  },
+
+  stopBtn:{
+    background:"#f59e0b",
+    border:"none",
+    padding:"4px 8px",
+    borderRadius:"5px",
+    cursor:"pointer",
+    color:"white"
+  },
+
+  startBtn:{
+    background:"#22c55e",
+    border:"none",
+    padding:"4px 8px",
+    borderRadius:"5px",
+    cursor:"pointer",
+    color:"white"
+  },
+
+  deleteBtn:{
+    background:"#ef4444",
+    border:"none",
+    padding:"4px 8px",
+    borderRadius:"5px",
+    cursor:"pointer",
+    color:"white"
   },
 
   main:{
     flex:1,
-    width:"100%",
     background:"#1e293b",
     padding:"25px",
     borderRadius:"10px",
@@ -270,7 +476,7 @@ const styles = {
   metrics:{
     display:"flex",
     gap:"20px",
-    marginBottom:"25px"
+    marginBottom:"20px"
   },
 
   metricBox:{

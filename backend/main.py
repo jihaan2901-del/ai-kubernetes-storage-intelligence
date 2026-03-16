@@ -1,16 +1,25 @@
 import threading
+import uvicorn
 from scheduler import start_collector
 from api import app
-import uvicorn
+from db import init_db
+
+# initialize database
+init_db()
+
+# start scheduler thread
+@app.on_event("startup")
+def start_scheduler_thread():
+
+    print("🚀 Starting collector + autoscaler scheduler")
+
+    thread = threading.Thread(target=start_collector)
+
+    thread.daemon = True
+
+    thread.start()
 
 
-def start_scheduler():
-    print("Starting collector thread")
-    start_collector()
+if __name__ == "__main__":
 
-
-thread = threading.Thread(target=start_scheduler)
-thread.daemon = True
-thread.start()
-
-uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

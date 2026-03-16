@@ -1,95 +1,48 @@
 import subprocess
-import pandas as pd
 import time
-import os
-from datetime import datetime
-
-FILE_PATH = os.path.join(os.getcwd(), "data", "storage.csv")
+from db import insert_metric
 
 
 def run_cmd(cmd):
-    """Run shell command and return output"""
     try:
-        out = subprocess.check_output(cmd, shell=True).decode().strip()
-        return out
-    except subprocess.CalledProcessError as e:
-        print("Command failed:", cmd)
-        print(e)
+        return subprocess.check_output(cmd, shell=True).decode().strip()
+    except:
         return None
 
 
-def get_pod(label):
-    """Get pod name by label"""
-    cmd = f"kubectl get pods -l app={label} -o jsonpath='{{.items[0].metadata.name}}'"
-    pod = run_cmd(cmd)
+def get_pods(label):
 
-    if not pod:
-        print(f"No pod found for {label}")
-        return None
+    cmd = f"kubectl get pods -l app={label} --field-selector=status.phase=Running -o jsonpath='{{.items[*].metadata.name}}'"
+    out = run_cmd(cmd)
 
-    return pod
+    if not out:
+        return []
+
+    return out.split()
 
 
 def get_storage(pod, path):
-    """Get folder size inside container"""
     cmd = f"kubectl exec {pod} -- sh -c 'du -s {path} 2>/dev/null'"
     out = run_cmd(cmd)
 
     if not out:
         return 0
 
-    size_kb = int(out.split()[0])
-    size_gb = size_kb / (1024 * 1024)
-
-    return size_gb
+    kb = int(out.split()[0])
+    return kb / (1024 * 1024)
 
 
 def collect_data():
-    print("Collector running:", datetime.now())
-
-    print("Collecting data...")
-
-    redis_pod = get_pod("redis")
-    mongo_pod = get_pod("mongodb")
-
-    records = []
 
     now = time.time()
-    now_iso = datetime.now().isoformat()
 
-    if redis_pod:
-        redis_storage = get_storage(redis_pod, "/data")
+    redis_pods = get_pods("redis")
+    mongo_pods = get_pods("mongodb")
 
-        records.append({
-            "timestamp": now,
-            "datetime": now_iso,
-            "pod": "redis",
-            "storage_used": redis_storage,
-            "total_storage": 10
-        })
+    for pod in redis_pods:
+        used = get_storage(pod, "/data")
+        insert_metric(now, pod, used, 10)
 
-    if mongo_pod:
-        mongo_storage = get_storage(mongo_pod, "/data/db")
-
-        records.append({
-            "timestamp": now,
-            "datetime": now_iso,
-            "pod": "mongodb",
-            "storage_used": mongo_storage,
-            "total_storage": 10
-        })
-
-    if not records:
-        print("No storage data collected")
-        return
-
-    os.makedirs("data", exist_ok=True)
-
-    df = pd.DataFrame(records)
-
-    if not os.path.exists(FILE_PATH):
-        df.to_csv(FILE_PATH, index=False)
-    else:
-        df.to_csv(FILE_PATH, mode="a", header=False, index=False)
-
-    print("Collected storage:", records)
+    for pod in mongo_pods:
+        used = get_storage(pod, "/data/db")
+        insert_metric(now, pod, used, 10)
