@@ -15,7 +15,7 @@ export default function App() {
 
   const [pods, setPods] = useState([]);
   const [selectedPod, setSelectedPod] = useState(null);
-  const [recommendation, setRecommendation] = useState(false);
+  const [recommendation,setRecommendation] = useState(false);
 
   async function fetchPods() {
 
@@ -41,23 +41,23 @@ export default function App() {
 
   }
 
-  async function checkRecommendation() {
+  async function checkRecommendation(){
 
-    try {
+    try{
 
       const res = await fetch(`${API}/recommendation`);
       const data = await res.json();
 
       setRecommendation(data.scale_down_recommended);
 
-    } catch {}
+    }catch{}
 
   }
 
-  async function proceedScaleDown() {
+  async function proceedScaleDown(){
 
-    await fetch(`${API}/scale-down`, {
-      method: "POST"
+    await fetch(`${API}/scale-down`,{
+      method:"POST"
     });
 
     setRecommendation(false);
@@ -71,11 +71,6 @@ export default function App() {
   async function startPod(pod) {
     await fetch(`${API}/start/${pod}`, { method: "POST" });
   }
-
-  async function deletePod(pod) {
-    await fetch(`${API}/delete/${pod}`, { method: "POST" });
-  }
-
   useEffect(() => {
 
     fetchPods();
@@ -100,18 +95,15 @@ export default function App() {
         AI Kubernetes Storage Intelligence
       </h1>
 
-      {/* AI RECOMMENDATION PANEL */}
+      {/* AI Recommendation Panel */}
 
       {recommendation && (
 
-        <div style={styles.recommendationBox}>
+        <div style={styles.recommendation}>
 
-          <h3>AI Recommendation</h3>
-
-          <p>
-            Storage has remained stable for 5 minutes.  
-            It is recommended to scale down the cluster.
-          </p>
+          <div>
+            ⚠ AI Recommendation: Storage stable for 5 minutes. Scale down cluster.
+          </div>
 
           <button
             style={styles.scaleBtn}
@@ -229,17 +221,6 @@ export default function App() {
                     </button>
 
                   )}
-
-                  <button
-                    style={styles.deleteBtn}
-                    onClick={(e)=>{
-                      e.stopPropagation();
-                      deletePod(pod.name);
-                    }}
-                  >
-                    Delete
-                  </button>
-
                 </div>
 
               </div>
@@ -367,12 +348,15 @@ const styles = {
     marginBottom:"20px"
   },
 
-  recommendationBox:{
+  recommendation:{
     background:"#1e293b",
-    padding:"20px",
+    border:"2px solid #38bdf8",
+    padding:"15px",
     borderRadius:"10px",
     marginBottom:"20px",
-    border:"2px solid #38bdf8"
+    display:"flex",
+    justifyContent:"space-between",
+    alignItems:"center"
   },
 
   scaleBtn:{
@@ -381,8 +365,7 @@ const styles = {
     padding:"8px 16px",
     borderRadius:"6px",
     color:"white",
-    cursor:"pointer",
-    marginTop:"10px"
+    cursor:"pointer"
   },
 
   dashboard:{
@@ -448,15 +431,6 @@ const styles = {
 
   startBtn:{
     background:"#22c55e",
-    border:"none",
-    padding:"4px 8px",
-    borderRadius:"5px",
-    cursor:"pointer",
-    color:"white"
-  },
-
-  deleteBtn:{
-    background:"#ef4444",
     border:"none",
     padding:"4px 8px",
     borderRadius:"5px",

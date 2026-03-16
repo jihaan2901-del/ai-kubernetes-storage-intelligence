@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import subprocess
 import sqlite3
 import pandas as pd
-from scaler import recommendation
+from scaler import get_recommendation
 from predictor import predict_full_time
 from db import get_state, set_state
 from scaler import scale_down
@@ -95,27 +95,6 @@ def stop_pod(pod: str):
         "status": "inactive",
         "pod": pod
     }
-
-
-@app.post("/delete/{pod}")
-def delete_pod(pod: str):
-
-    replicas = run_cmd(
-        "kubectl get deployment mongodb -o jsonpath='{.spec.replicas}'"
-    )
-
-    replicas = int(replicas.replace("'", ""))
-
-    if replicas > 1:
-
-        new_replicas = replicas - 1
-
-        run_cmd(f"kubectl scale deployment mongodb --replicas={new_replicas}")
-
-    return {
-        "status": "scaled_down",
-        "replicas": replicas - 1
-    }
     
 @app.post("/start/{pod}")
 def start_pod(pod: str):
@@ -130,10 +109,16 @@ def start_pod(pod: str):
     }
 
 @app.get("/recommendation")
-def get_recommendation():
+def get_recommendation_api():
+
+    replicas = run_cmd(
+        "kubectl get deployment mongodb -o jsonpath='{.spec.replicas}'"
+    )
+
+    replicas = int(replicas.replace("'", ""))
 
     return {
-        "scale_down_recommended": recommendation
+        "scale_down_recommended": get_recommendation() and replicas > 1
     }
 
 @app.post("/scale-down")

@@ -20,9 +20,12 @@ initial_storage = None
 recommendation = False
 
 
+# ----------------------------
+# Run shell command
+# ----------------------------
 def run(cmd):
     try:
-        print("Running:", cmd)
+        print("Running command:", cmd)
         return subprocess.check_output(cmd, shell=True).decode().strip()
     except Exception as e:
         print("Command failed:", e)
@@ -42,6 +45,7 @@ def get_newest_pod():
     out = run(cmd)
 
     if not out:
+        print("No Mongo pods found")
         return None
 
     out = out.replace("'", "")
@@ -59,13 +63,14 @@ def get_newest_pod():
         pods.append((name, ts))
 
     if not pods:
+        print("No valid Mongo pod entries")
         return None
 
     pods.sort(key=lambda x: x[1])
 
     newest = pods[-1][0]
 
-    print("Newest Mongo Pod:", newest)
+    print("🧠 Newest Mongo Pod:", newest)
 
     return newest
 
@@ -80,7 +85,11 @@ def get_replicas():
     if not out:
         return 1
 
-    return int(out.replace("'", ""))
+    replicas = int(out.replace("'", ""))
+
+    print("Current Mongo replicas:", replicas)
+
+    return replicas
 
 
 # ----------------------------
@@ -90,23 +99,29 @@ def scale_up():
 
     global last_scale_time
     global scaled_recently
+    global observation_start
+    global initial_storage
 
     replicas = get_replicas()
 
-    print("Current replicas:", replicas)
-
     if replicas >= MAX_REPLICAS:
-        print("Max replicas reached")
+        print("⚠ Max replicas reached")
         return
 
     new_replicas = replicas + 1
 
-    print("⚡ Scaling UP mongodb →", new_replicas)
+    print("🚀 Scaling UP MongoDB →", new_replicas)
 
     run(f"kubectl scale deployment mongodb --replicas={new_replicas}")
 
     last_scale_time = time.time()
+
     scaled_recently = True
+
+    observation_start = None
+    initial_storage = None
+
+    print("Scale-up complete. Observation window reset.")
 
 
 # ----------------------------
@@ -114,23 +129,31 @@ def scale_up():
 # ----------------------------
 def scale_down():
 
-    global last_scale_time
     global recommendation
+    global observation_start
+    global initial_storage
 
     replicas = get_replicas()
 
+    print("Current replicas:", replicas)
+
     if replicas <= MIN_REPLICAS:
-        print("Min replicas reached")
+
+        print("⚠ Cannot scale below minimum replicas")
+        recommendation = False
         return
 
     new_replicas = replicas - 1
 
-    print("⬇ Scaling DOWN mongodb →", new_replicas)
+    print("⬇ Scaling DOWN MongoDB →", new_replicas)
 
     run(f"kubectl scale deployment mongodb --replicas={new_replicas}")
 
-    last_scale_time = time.time()
     recommendation = False
+
+    observation_start = None
+    initial_storage = None
+    print("scale down completed..")
 
 
 # ----------------------------
@@ -138,17 +161,23 @@ def scale_down():
 # ----------------------------
 def check_and_scale():
 
-    global scaled_recently
     global observation_start
     global initial_storage
     global recommendation
 
     now = time.time()
 
+    print("\n---------------- AUTOSCALER CHECK ----------------")
+
     newest_pod = get_newest_pod()
 
     if not newest_pod:
+        print("No Mongo pod detected")
         return
+
+    replicas = get_replicas()
+
+    print("Mongo replica count:", replicas)
 
     conn = sqlite3.connect(DB)
 
@@ -170,62 +199,72 @@ def check_and_scale():
 
     print("Storage for newest pod:", newest_pod, "→", used)
 
-    # cooldown protection
-    if now - last_scale_time < COOLDOWN:
-        print("Cooldown active")
-        return
-
-    # ----------------------------
+    # ----------------
     # SCALE UP
-    # ----------------------------
-    if used >= THRESHOLD and not scaled_recently:
+    # ----------------
+    if used >= THRESHOLD and replicas < MAX_REPLICAS:
+
+        print("🚨 Threshold exceeded → scaling up")
 
         scale_up()
 
-        print("Scaling triggered")
-
         return
 
-    # reset lock when load shifts
-    if used < OBSERVE_THRESHOLD:
-        scaled_recently = False
 
-    # ----------------------------
+    # ----------------
     # SCALE DOWN OBSERVATION
-    # ----------------------------
-    if used <= OBSERVE_THRESHOLD:
+    # ----------------
+    if replicas > 1 and used <= OBSERVE_THRESHOLD:
+
+        print("Observation condition satisfied (replicas > 1 and storage <= threshold)")
 
         if observation_start is None:
 
             observation_start = now
             initial_storage = used
 
-            print("Starting scale-down observation")
+            print("👀 Starting 5-minute observation window")
+            print("Initial storage:", initial_storage)
 
         else:
 
             elapsed = now - observation_start
 
-            print("Observation time:", int(elapsed), "seconds")
+            print("⏱ Observation running:", int(elapsed), "seconds")
 
             if elapsed >= 300:
 
-                if abs(used - initial_storage) < 0.2:
+                change = abs(used - initial_storage)
+
+                print("Storage change:", change)
+
+                if change < 0.2:
 
                     recommendation = True
 
                     print("⚠ Downscale recommended")
 
+                else:
+
+                    print("Storage unstable → resetting observation")
+
+                    observation_start = None
+
     else:
+
+        if observation_start is not None:
+
+            print("❌ Observation reset")
 
         observation_start = None
         initial_storage = None
         recommendation = False
 
-
 # ----------------------------
 # API helper
 # ----------------------------
 def get_recommendation():
+
+    print("Recommendation status:", recommendation)
 
     return recommendation

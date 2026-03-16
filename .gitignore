@@ -1,5 +1,5 @@
 venv/
-data/storage.csv
+backend/storage.db
 backend/__pycache__/
 *.pyc
 .env

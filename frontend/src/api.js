@@ -17,12 +17,6 @@ export async function startPod(pod) {
   });
 }
 
-export async function deletePod(pod) {
-  await fetch(`${API}/delete/${pod}`, {
-    method: "POST"
-  });
-}
-
 export async function getRecommendation(){
   const res = await fetch("http://localhost:8000/recommendation");
   return res.json();
