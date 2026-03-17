@@ -27,3 +27,8 @@ export async function scaleDown(){
     method:"POST"
   });
 }
+
+export async function fetchClusterStorage(){
+  const res = await fetch(`${API}/cluster-storage`);
+  return res.json();
+}

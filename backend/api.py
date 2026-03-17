@@ -42,6 +42,23 @@ def get_running_pods():
     except:
         return []
 
+def get_node_storage():
+
+    out = run_cmd("df -BG / | awk 'NR==2 {print $2,$3}'")
+
+    if not out:
+        return {"total":113,"used":0}
+
+    total, used = out.split()
+
+    total = int(total.replace("G",""))
+    used = int(used.replace("G",""))
+
+    return {
+        "total": total,
+        "node_used": used
+    }
+
 
 @app.get("/pods")
 def get_pods():
@@ -127,3 +144,55 @@ def manual_scale_down():
     scale_down()
 
     return {"status": "scaled_down"}
+
+@app.get("/cluster-storage")
+def cluster_storage():
+
+    # get running pods
+    pods_cmd = "kubectl get pods --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}'"
+    pods_raw = run_cmd(pods_cmd)
+
+    pods = []
+
+    if pods_raw:
+        pods = pods_raw.replace("'", "").split()
+
+    total_used = 0
+
+    for pod in pods:
+
+        # check redis path
+        redis = run_cmd(f"kubectl exec {pod} -- sh -c 'du -sk /data 2>/dev/null'")
+        
+        # check mongodb path
+        mongo = run_cmd(f"kubectl exec {pod} -- sh -c 'du -sk /data/db 2>/dev/null'")
+
+        out = redis if redis else mongo
+
+        if out:
+            kb = int(out.split()[0])
+            gb = kb / (1024 * 1024)
+            total_used += gb
+
+    # get total node storage
+    raw = run_cmd(
+        "kubectl get node -o jsonpath='{.items[0].status.capacity.ephemeral-storage}'"
+    )
+
+    raw = raw.replace("'", "")
+
+    total_gb = 0
+
+    if "Ki" in raw:
+        total_gb = int(raw.replace("Ki","")) / (1024 * 1024)
+
+    elif "Mi" in raw:
+        total_gb = int(raw.replace("Mi","")) / 1024
+
+    elif "Gi" in raw:
+        total_gb = int(raw.replace("Gi",""))
+
+    return {
+        "containers_used": round(total_used,2),
+        "cluster_total": round(total_gb,2)
+    }

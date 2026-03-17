@@ -16,6 +16,7 @@ export default function App() {
   const [pods, setPods] = useState([]);
   const [selectedPod, setSelectedPod] = useState(null);
   const [recommendation,setRecommendation] = useState(false);
+  const [cluster,setCluster] = useState(null);
 
   async function fetchPods() {
 
@@ -38,6 +39,15 @@ export default function App() {
       return found || updated[0] || null;
 
     });
+
+  }
+
+  async function fetchCluster(){
+
+    const res = await fetch(`${API}/cluster-storage`);
+    const data = await res.json();
+
+    setCluster(data);
 
   }
 
@@ -71,15 +81,18 @@ export default function App() {
   async function startPod(pod) {
     await fetch(`${API}/start/${pod}`, { method: "POST" });
   }
+
   useEffect(() => {
 
     fetchPods();
     checkRecommendation();
+    fetchCluster();
 
     const interval = setInterval(() => {
 
       fetchPods();
       checkRecommendation();
+      fetchCluster();
 
     }, 3000);
 
@@ -95,7 +108,36 @@ export default function App() {
         AI Kubernetes Storage Intelligence
       </h1>
 
-      {/* AI Recommendation Panel */}
+      {/* Cluster Storage Card */}
+
+      {cluster && (
+
+        <div style={styles.clusterCard}>
+
+          <div style={styles.clusterTitle}>
+            Cluster Storage Usage
+          </div>
+
+          <div style={styles.clusterValue}>
+            {cluster.containers_used.toFixed(2)} / {cluster.cluster_total} GB
+          </div>
+
+          <div style={styles.progressBarOuter}>
+
+            <div
+              style={{
+                ...styles.progressBarInner,
+                width:`${(cluster.containers_used/cluster.cluster_total)*100}%`
+              }}
+            />
+
+          </div>
+
+        </div>
+
+      )}
+
+      {/* AI Recommendation */}
 
       {recommendation && (
 
@@ -118,7 +160,7 @@ export default function App() {
 
       <div style={styles.dashboard}>
 
-        {/* SIDEBAR */}
+        {/* Sidebar */}
 
         <div style={styles.sidebar}>
 
@@ -231,7 +273,7 @@ export default function App() {
 
         </div>
 
-        {/* MAIN PANEL */}
+        {/* Main Panel */}
 
         <div style={styles.main}>
 
@@ -336,145 +378,175 @@ function Metric({title,value}) {
 
 const styles = {
 
-  page:{
-    padding:"30px",
-    background:"#0f172a",
-    minHeight:"100vh",
-    color:"#e2e8f0",
-    fontFamily:"Inter"
-  },
+page:{
+padding:"30px",
+background:"#0f172a",
+minHeight:"100vh",
+color:"#e2e8f0",
+fontFamily:"Inter"
+},
 
-  title:{
-    marginBottom:"20px"
-  },
+title:{
+marginBottom:"20px"
+},
 
-  recommendation:{
-    background:"#1e293b",
-    border:"2px solid #38bdf8",
-    padding:"15px",
-    borderRadius:"10px",
-    marginBottom:"20px",
-    display:"flex",
-    justifyContent:"space-between",
-    alignItems:"center"
-  },
+clusterCard:{
+background:"#1e293b",
+padding:"20px",
+borderRadius:"10px",
+marginBottom:"20px"
+},
 
-  scaleBtn:{
-    background:"#38bdf8",
-    border:"none",
-    padding:"8px 16px",
-    borderRadius:"6px",
-    color:"white",
-    cursor:"pointer"
-  },
+clusterTitle:{
+fontSize:"14px",
+color:"#94a3b8"
+},
 
-  dashboard:{
-    display:"flex",
-    height:"80vh",
-    gap:"20px"
-  },
+clusterValue:{
+fontSize:"28px",
+fontWeight:"bold",
+marginBottom:"10px"
+},
 
-  sidebar:{
-    width:"300px",
-    background:"#1e293b",
-    padding:"20px",
-    borderRadius:"10px",
-    overflowY:"auto"
-  },
+progressBarOuter:{
+height:"10px",
+background:"#334155",
+borderRadius:"10px",
+overflow:"hidden"
+},
 
-  podItem:{
-    background:"#0f172a",
-    padding:"12px",
-    marginTop:"10px",
-    borderRadius:"8px",
-    cursor:"pointer",
-    display:"flex",
-    flexDirection:"column",
-    gap:"6px"
-  },
+progressBarInner:{
+height:"100%",
+background:"#38bdf8"
+},
 
-  podHeader:{
-    display:"flex",
-    justifyContent:"space-between"
-  },
+recommendation:{
+background:"#1e293b",
+border:"2px solid #38bdf8",
+padding:"15px",
+borderRadius:"10px",
+marginBottom:"20px",
+display:"flex",
+justifyContent:"space-between",
+alignItems:"center"
+},
 
-  podLabel:{
-    fontWeight:"bold"
-  },
+scaleBtn:{
+background:"#38bdf8",
+border:"none",
+padding:"8px 16px",
+borderRadius:"6px",
+color:"white",
+cursor:"pointer"
+},
 
-  podName:{
-    fontSize:"12px",
-    color:"#94a3b8"
-  },
+dashboard:{
+display:"flex",
+height:"80vh",
+gap:"20px"
+},
 
-  status:{
-    color:"white",
-    padding:"3px 8px",
-    borderRadius:"5px",
-    fontSize:"12px",
-    width:"fit-content"
-  },
+sidebar:{
+width:"300px",
+background:"#1e293b",
+padding:"20px",
+borderRadius:"10px",
+overflowY:"auto"
+},
 
-  actions:{
-    display:"flex",
-    gap:"8px"
-  },
+podItem:{
+background:"#0f172a",
+padding:"12px",
+marginTop:"10px",
+borderRadius:"8px",
+cursor:"pointer",
+display:"flex",
+flexDirection:"column",
+gap:"6px"
+},
 
-  stopBtn:{
-    background:"#f59e0b",
-    border:"none",
-    padding:"4px 8px",
-    borderRadius:"5px",
-    cursor:"pointer",
-    color:"white"
-  },
+podHeader:{
+display:"flex",
+justifyContent:"space-between"
+},
 
-  startBtn:{
-    background:"#22c55e",
-    border:"none",
-    padding:"4px 8px",
-    borderRadius:"5px",
-    cursor:"pointer",
-    color:"white"
-  },
+podLabel:{
+fontWeight:"bold"
+},
 
-  main:{
-    flex:1,
-    background:"#1e293b",
-    padding:"25px",
-    borderRadius:"10px",
-    display:"flex",
-    flexDirection:"column"
-  },
+podName:{
+fontSize:"12px",
+color:"#94a3b8"
+},
 
-  metrics:{
-    display:"flex",
-    gap:"20px",
-    marginBottom:"20px"
-  },
+status:{
+color:"white",
+padding:"3px 8px",
+borderRadius:"5px",
+fontSize:"12px",
+width:"fit-content"
+},
 
-  metricBox:{
-    flex:1,
-    background:"#334155",
-    padding:"15px",
-    borderRadius:"8px"
-  },
+actions:{
+display:"flex",
+gap:"8px"
+},
 
-  metricTitle:{
-    fontSize:"12px",
-    color:"#94a3b8"
-  },
+stopBtn:{
+background:"#f59e0b",
+border:"none",
+padding:"4px 8px",
+borderRadius:"5px",
+cursor:"pointer",
+color:"white"
+},
 
-  metricValue:{
-    fontSize:"22px",
-    fontWeight:"bold"
-  },
+startBtn:{
+background:"#22c55e",
+border:"none",
+padding:"4px 8px",
+borderRadius:"5px",
+cursor:"pointer",
+color:"white"
+},
 
-  chart:{
-    flex:1,
-    background:"#0f172a",
-    padding:"15px",
-    borderRadius:"10px"
-  }
+main:{
+flex:1,
+background:"#1e293b",
+padding:"25px",
+borderRadius:"10px",
+display:"flex",
+flexDirection:"column"
+},
+
+metrics:{
+display:"flex",
+gap:"20px",
+marginBottom:"20px"
+},
+
+metricBox:{
+flex:1,
+background:"#334155",
+padding:"15px",
+borderRadius:"8px"
+},
+
+metricTitle:{
+fontSize:"12px",
+color:"#94a3b8"
+},
+
+metricValue:{
+fontSize:"22px",
+fontWeight:"bold"
+},
+
+chart:{
+flex:1,
+background:"#0f172a",
+padding:"15px",
+borderRadius:"10px"
+}
 
 };
